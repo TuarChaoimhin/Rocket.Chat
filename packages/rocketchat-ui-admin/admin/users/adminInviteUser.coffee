@@ -1,9 +1,6 @@
 Template.adminInviteUser.helpers
 	isAdmin: ->
 		return RocketChat.authz.hasRole(Meteor.userId(), 'admin')
-	emailEnabled: ->
-		console.log 'emailEnabled', RocketChat.settings.get('MAIL_URL') or (RocketChat.settings.get('SMTP_Host') and RocketChat.settings.get('SMTP_Username') and RocketChat.settings.get('SMTP_Password'))
-		return RocketChat.settings.get('MAIL_URL') or (RocketChat.settings.get('SMTP_Host') and RocketChat.settings.get('SMTP_Username') and RocketChat.settings.get('SMTP_Password'))
 	inviteEmails: ->
 		return Template.instance().inviteEmails.get()
 
@@ -18,7 +15,7 @@ Template.adminInviteUser.events
 					instance.clearForm()
 					instance.inviteEmails.set validEmails
 				if error
-					toastr.error error.reason
+					handleError(error)
 		else
 			toastr.error t('Send_invitation_email_error')
 

@@ -11,8 +11,6 @@ Package.describe({
 });
 
 Package.onUse(function(api) {
-	api.versionsFrom('1.2.1');
-
 	api.use([
 		'mongo',
 		'ecmascript',
@@ -28,12 +26,14 @@ Package.onUse(function(api) {
 	api.addFiles('flex-tab/tabs/membersList.html', 'client');
 	api.addFiles('flex-tab/tabs/messageSearch.html', 'client');
 	api.addFiles('flex-tab/tabs/uploadedFilesList.html', 'client');
+	api.addFiles('flex-tab/tabs/userEdit.html', 'client');
 	api.addFiles('flex-tab/tabs/userInfo.html', 'client');
 
 	api.addFiles('flex-tab/flexTabBar.coffee', 'client');
 	api.addFiles('flex-tab/tabs/membersList.coffee', 'client');
 	api.addFiles('flex-tab/tabs/messageSearch.coffee', 'client');
 	api.addFiles('flex-tab/tabs/uploadedFilesList.coffee', 'client');
+	api.addFiles('flex-tab/tabs/userEdit.coffee', 'client');
 	api.addFiles('flex-tab/tabs/userInfo.coffee', 'client');
 
 });

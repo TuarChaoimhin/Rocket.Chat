@@ -3,6 +3,7 @@ RocketChat.statistics.get = ->
 
 	# Version
 	statistics.uniqueId = RocketChat.settings.get("uniqueID")
+	statistics.installedAt = RocketChat.models.Settings.findOne("uniqueID")?.createdAt
 	statistics.version = RocketChat.Info?.version
 	statistics.tag = RocketChat.Info?.tag
 	statistics.branch = RocketChat.Info?.branch
@@ -26,15 +27,15 @@ RocketChat.statistics.get = ->
 
 	m = ->
 		emit 1,
-			sum: this.usernames.length or 0
-			min: this.usernames.length or 0
-			max: this.usernames.length or 0
+			sum: this.usernames?.length or 0
+			min: this.usernames?.length or 0
+			max: this.usernames?.length or 0
 			count: 1
 
 		emit this.t,
-			sum: this.usernames.length or 0
-			min: this.usernames.length or 0
-			max: this.usernames.length or 0
+			sum: this.usernames?.length or 0
+			min: this.usernames?.length or 0
+			max: this.usernames?.length or 0
 			count: 1
 
 	r = (k, v) ->
@@ -84,5 +85,14 @@ RocketChat.statistics.get = ->
 		totalmem: os.totalmem()
 		freemem: os.freemem()
 		cpus: os.cpus()
+
+	statistics.process =
+		nodeVersion: process.version
+		pid: process.pid
+		uptime: process.uptime()
+
+	statistics.migration = RocketChat.Migrations._getControl()
+
+	statistics.instanceCount = InstanceStatus.getCollection().find().count()
 
 	return statistics

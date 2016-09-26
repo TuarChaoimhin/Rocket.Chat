@@ -6,25 +6,30 @@ currentTracker = undefined
 	Meteor.defer ->
 		currentTracker = Tracker.autorun (c) ->
 			if RoomManager.open(type + name).ready() isnt true
-				BlazeLayout.render 'main', {center: 'loading'}
+				BlazeLayout.render 'main', { modal: RocketChat.Layout.isEmbedded(), center: 'loading' }
+				return
+
+			user = Meteor.user()
+			unless user?.username
 				return
 
 			currentTracker = undefined
 			c.stop()
 
-			query =
-				t: type
-				name: name
-
-			if type is 'd'
-				delete query.name
-				query.usernames =
-					$all: [name, Meteor.user()?.username]
-
-			room = ChatRoom.findOne(query)
+			room = RocketChat.roomTypes.findRoom(type, name, user)
 			if not room?
-				Session.set 'roomNotFound', {type: type, name: name}
-				BlazeLayout.render 'main', {center: 'roomNotFound'}
+				if type is 'd'
+					Meteor.call 'createDirectMessage', name, (err) ->
+						if !err
+							RoomManager.close(type + name)
+							openRoom('d', name)
+						else
+							Session.set 'roomNotFound', {type: type, name: name}
+							BlazeLayout.render 'main', {center: 'roomNotFound'}
+							return
+				else
+					Session.set 'roomNotFound', {type: type, name: name}
+					BlazeLayout.render 'main', {center: 'roomNotFound'}
 				return
 
 			$('.rocket-loader').remove();
@@ -54,6 +59,12 @@ currentTracker = undefined
 			# update user's room subscription
 			sub = ChatSubscription.findOne({rid: room._id})
 			if sub?.open is false
-				Meteor.call 'openRoom', room._id
+				Meteor.call 'openRoom', room._id, (err) ->
+					if err
+						return handleError(err)
+
+			if FlowRouter.getQueryParam('msg')
+				msg = { _id: FlowRouter.getQueryParam('msg'), rid: room._id }
+				RoomHistoryManager.getSurroundingMessages(msg);
 
 			RocketChat.callbacks.run 'enter-room', sub

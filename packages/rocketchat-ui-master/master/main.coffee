@@ -1,8 +1,10 @@
+`import Clipboard from 'clipboard';`
+
 Template.body.onRendered ->
-	new Clipboard('.clipboard')
+	clipboard = new Clipboard('.clipboard')
 
 	$(document.body).on 'keydown', (e) ->
-		if e.keyCode is 80 and (e.ctrlKey is true or e.metaKey is true)
+		if e.keyCode is 80 and (e.ctrlKey is true or e.metaKey is true) and e.shiftKey is false
 			e.preventDefault()
 			e.stopPropagation()
 			spotlight.show()
@@ -27,13 +29,24 @@ Template.body.onRendered ->
 					if subscription.alert or subscription.unread > 0
 						Meteor.call 'readMessages', subscription.rid
 
+	$(document.body).on 'click', 'a', (e) ->
+		link = e.currentTarget
+		if link.origin is s.rtrim(Meteor.absoluteUrl(), '/') and /msg=([a-zA-Z0-9]+)/.test(link.search)
+			e.preventDefault()
+			e.stopPropagation()
+
+			if RocketChat.Layout.isEmbedded()
+				fireGlobalEvent('click-message-link', { link: link.pathname + link.search })
+				return window.open(link.pathname + link.search)
+
+			FlowRouter.go(link.pathname + link.search)
 
 	Tracker.autorun (c) ->
 		w = window
 		d = document
 		s = 'script'
 		l = 'dataLayer'
-		i = RocketChat.settings.get 'API_Analytics'
+		i = RocketChat.settings.get 'GoogleTagManager_id'
 		if Match.test(i, String) and i.trim() isnt ''
 			c.stop()
 			do (w,d,s,l,i) ->
@@ -125,8 +138,16 @@ Template.main.helpers
 			$('html').addClass("scroll").removeClass("noscroll")
 			return false
 
+	useIframe: ->
+		return RocketChat.iframeLogin.reactiveEnabled.get()
+
+	iframeUrl: ->
+		return RocketChat.iframeLogin.reactiveIframeUrl.get()
+
 	subsReady: ->
-		return not Meteor.userId()? or (FlowRouter.subsReady('userData', 'activeUsers'))
+		ready = not Meteor.userId()? or (FlowRouter.subsReady('userData', 'activeUsers') and CachedChatSubscription.ready.get())
+		RocketChat.CachedCollectionManager.syncEnabled = ready
+		return ready
 
 	hasUsername: ->
 		return Meteor.userId()? and Meteor.user().username?
@@ -142,6 +163,18 @@ Template.main.helpers
 	flexOpenedRTC2: ->
 		console.log 'layout.helpers flexOpenedRTC2' if window.rocketDebug
 		return 'layout2' if (Session.get('rtcLayoutmode') > 1)
+
+	requirePasswordChange: ->
+		return Meteor.user()?.requirePasswordChange is true
+
+	CustomScriptLoggedOut: ->
+		RocketChat.settings.get 'Custom_Script_Logged_Out'
+
+	CustomScriptLoggedIn: ->
+		RocketChat.settings.get 'Custom_Script_Logged_In'
+
+	embeddedVersion: ->
+		return 'embedded-view' if RocketChat.Layout.isEmbedded()
 
 
 Template.main.events
@@ -218,3 +251,29 @@ Template.main.onRendered ->
 		$('html').addClass "rtl"
 	else
 		$('html').removeClass "rtl"
+
+	$('#initial-page-loading').remove()
+
+	window.addEventListener 'focus', ->
+		Meteor.setTimeout ->
+			if not $(':focus').is('INPUT,TEXTAREA')
+				$('.input-message').focus()
+		, 100
+
+	Tracker.autorun ->
+		prefs = Meteor.user()?.settings?.preferences
+		if prefs?.hideUsernames
+			$(document.body).on('mouseleave', 'button.thumb', (e) ->
+				RocketChat.tooltip.hide();
+			)
+
+			$(document.body).on('mouseenter', 'button.thumb', (e) ->
+				avatarElem = $(e.currentTarget)
+				username = avatarElem.attr('data-username')
+				if username
+					e.stopPropagation()
+					RocketChat.tooltip.showElement($('<span>').text(username), avatarElem)
+			)
+		else
+			$(document.body).off('mouseenter', 'button.thumb')
+			$(document.body).off('mouseleave', 'button.thumb')

@@ -11,6 +11,9 @@ WebApp.rawConnectHandlers.use (req, res, next) ->
 	if req.headers['content-type'] not in ['', undefined]
 		return next()
 
+	if req.url.indexOf('/ufs/') is 0
+		return next()
+
 	buf = ''
 	req.setEncoding('utf8')
 	req.on 'data', (chunk) -> buf += chunk
@@ -28,9 +31,8 @@ WebApp.rawConnectHandlers.use (req, res, next) ->
 
 
 WebApp.rawConnectHandlers.use (req, res, next) ->
-	res.setHeader("Access-Control-Allow-Origin", "*")
-	res.setHeader("X-Rocket-Chat-Version", VERSION)
-	res.setHeader("Access-Control-Expose-Headers",  "X-Rocket-Chat-Version")
+	if /^\/(api|_timesync|sockjs|tap-i18n|__cordova)(\/|$)/.test req.url
+		res.setHeader("Access-Control-Allow-Origin", "*")
 
 	# Block next handlers to override CORS with value http://meteor.local
 	setHeader = res.setHeader
@@ -44,8 +46,6 @@ WebApp.rawConnectHandlers.use (req, res, next) ->
 _staticFilesMiddleware = WebAppInternals.staticFilesMiddleware
 WebAppInternals._staticFilesMiddleware = (staticFiles, req, res, next) ->
 	res.setHeader("Access-Control-Allow-Origin", "*")
-	res.setHeader("X-Rocket-Chat-Version", VERSION)
-	res.setHeader("Access-Control-Expose-Headers",  "X-Rocket-Chat-Version")
 	_staticFilesMiddleware(staticFiles, req, res, next)
 
 
@@ -74,6 +74,13 @@ httpServer.addListener 'request', (req, res) ->
 	isLocal = localhostRegexp.test(remoteAddress) and (not req.headers['x-forwarded-for'] or _.all(req.headers['x-forwarded-for'].split(','), localhostTest))
 
 	isSsl = req.connection.pair or (req.headers['x-forwarded-proto'] and req.headers['x-forwarded-proto'].indexOf('https') isnt -1)
+
+	if RocketChat?.debugLevel? and RocketChat.debugLevel is 'debug'
+		console.log 'req.url', req.url
+		console.log 'remoteAddress', remoteAddress
+		console.log 'isLocal', isLocal
+		console.log 'isSsl', isSsl
+		console.log 'req.headers', req.headers
 
 	if not isLocal and not isSsl
 		host = req.headers['host'] or url.parse(Meteor.absoluteUrl()).hostname

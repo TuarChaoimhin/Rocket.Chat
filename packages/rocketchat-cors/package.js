@@ -6,16 +6,11 @@ Package.describe({
 });
 
 Package.onUse(function(api) {
-	api.versionsFrom('1.0');
-
 	api.use([
 		'coffeescript',
 		'webapp'
 	]);
 
 	api.addFiles('cors.coffee', 'server');
-});
-
-Package.onTest(function(api) {
-
+	api.addFiles('common.coffee');
 });

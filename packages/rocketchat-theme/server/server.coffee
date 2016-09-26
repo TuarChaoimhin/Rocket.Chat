@@ -2,32 +2,44 @@ less = Npm.require('less')
 autoprefixer = Npm.require('less-plugin-autoprefix')
 crypto = Npm.require('crypto')
 
+logger = new Logger 'rocketchat:theme',
+	methods:
+		stop_rendering:
+			type: 'info'
+
+
 calculateClientHash = WebAppHashing.calculateClientHash
 WebAppHashing.calculateClientHash = (manifest, includeFilter, runtimeConfigOverride) ->
 	css = RocketChat.theme.getCss()
 
-	WebAppInternals.staticFiles['/__cordova/theme.css'] = WebAppInternals.staticFiles['/theme.css'] =
-		cacheable: true
-		sourceMapUrl: undefined
-		type: 'css'
-		content: css
+	if css.trim() isnt ''
+		WebAppInternals.staticFiles['/__cordova/theme.css'] = WebAppInternals.staticFiles['/theme.css'] =
+			cacheable: true
+			sourceMapUrl: undefined
+			type: 'css'
+			content: css
 
-	hash = crypto.createHash('sha1').update(css).digest('hex')
+		hash = crypto.createHash('sha1').update(css).digest('hex')
 
-	themeManifestItem = _.find manifest, (item) -> return item.path is 'app/theme.css'
-	if not themeManifestItem?
-		themeManifestItem = {}
-		manifest.push themeManifestItem
+		themeManifestItem = _.find manifest, (item) -> return item.path is 'app/theme.css'
+		if not themeManifestItem?
+			themeManifestItem = {}
+			manifest.push themeManifestItem
 
-	themeManifestItem.path = 'app/theme.css'
-	themeManifestItem.type = 'css'
-	themeManifestItem.cacheable = true
-	themeManifestItem.where = 'client'
-	themeManifestItem.url = "/theme.css?#{hash}"
-	themeManifestItem.size = css.length
-	themeManifestItem.hash = hash
+		themeManifestItem.path = 'app/theme.css'
+		themeManifestItem.type = 'css'
+		themeManifestItem.cacheable = true
+		themeManifestItem.where = 'client'
+		themeManifestItem.url = "/theme.css?#{hash}"
+		themeManifestItem.size = css.length
+		themeManifestItem.hash = hash
 
 	calculateClientHash.call this, manifest, includeFilter, runtimeConfigOverride
+
+
+setctionPerType =
+	'color': 'Colors'
+	'font': 'Fonts'
 
 
 RocketChat.theme = new class
@@ -35,12 +47,10 @@ RocketChat.theme = new class
 	packageCallbacks: []
 	files: [
 		'assets/stylesheets/global/_variables.less'
-		'assets/stylesheets/utils/_emojione.import.less'
 		'assets/stylesheets/utils/_keyframes.import.less'
 		'assets/stylesheets/utils/_lesshat.import.less'
 		'assets/stylesheets/utils/_preloader.import.less'
 		'assets/stylesheets/utils/_reset.import.less'
-		'assets/stylesheets/utils/_octicons.less'
 		'assets/stylesheets/utils/_chatops.less'
 		'assets/stylesheets/animation.css'
 		'assets/stylesheets/base.less'
@@ -51,19 +61,33 @@ RocketChat.theme = new class
 	]
 
 	constructor: ->
+		@customCSS = ''
+
 		RocketChat.settings.add 'css', ''
-		RocketChat.settings.addGroup 'Theme'
+		RocketChat.settings.addGroup 'Layout'
 
-		compile = _.debounce Meteor.bindEnvironment(@compile.bind(@)), 200
+		RocketChat.settings.onload 'css', Meteor.bindEnvironment (key, value, initialLoad) =>
+			if not initialLoad
+				Meteor.startup ->
+					process.emit('message', {refresh: 'client'})
 
-		RocketChat.settings.onload '*', Meteor.bindEnvironment (key, value, initialLoad) =>
-			if /^theme-.+/.test(key) is false then return
+		@compileDelayed = _.debounce Meteor.bindEnvironment(@compile.bind(@)), 100
 
-			name = key.replace /^theme-[a-z]+-/, ''
-			if @variables[name]?
-				@variables[name].value = value
+		Meteor.startup =>
+			RocketChat.settings.onAfterInitialLoad =>
 
-			compile()
+				RocketChat.settings.get '*', Meteor.bindEnvironment (key, value, initialLoad) =>
+					if key is 'theme-custom-css'
+						if value?.trim() isnt ''
+							@customCSS = value
+					else if /^theme-.+/.test(key) is true
+						name = key.replace /^theme-[a-z]+-/, ''
+						if @variables[name]?
+							@variables[name].value = value
+					else
+						return
+
+					@compileDelayed()
 
 	compile: ->
 		content = [
@@ -77,6 +101,8 @@ RocketChat.theme = new class
 			if _.isString result
 				content.push result
 
+		content.push @customCSS
+
 		content = content.join '\n'
 
 		options =
@@ -87,13 +113,16 @@ RocketChat.theme = new class
 
 		start = Date.now()
 		less.render content, options, (err, data) ->
-			console.log 'stop rendering', Date.now() - start
+			logger.stop_rendering Date.now() - start
 			if err?
 				return console.log err
 
 			RocketChat.settings.updateById 'css', data.css
 
-			process.emit('message', {refresh: 'client'})
+			Meteor.startup ->
+				Meteor.setTimeout ->
+					process.emit('message', {refresh: 'client'})
+				, 200
 
 	addVariable: (type, name, value, persist=true) ->
 		@variables[name] =
@@ -102,15 +131,18 @@ RocketChat.theme = new class
 
 		if persist is true
 			config =
-				group: 'Theme'
+				group: 'Layout'
 				type: type
-				section: type
+				section: setctionPerType[type]
 				public: false
 
 			RocketChat.settings.add "theme-#{type}-#{name}", value, config
 
 	addPublicColor: (name, value) ->
 		@addVariable 'color', name, value, true
+
+	addPublicFont: (name, value) ->
+		@addVariable 'font', name, value, true
 
 	getVariablesAsObject: ->
 		obj = {}
@@ -128,6 +160,7 @@ RocketChat.theme = new class
 
 	addPackageAsset: (cb) ->
 		@packageCallbacks.push cb
+		@compileDelayed()
 
 	getCss: ->
-		return RocketChat.settings.get 'css'
+		return RocketChat.settings.get('css') or ''
